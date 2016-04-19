@@ -37,6 +37,7 @@ int main(int argc, char* argv[])
         std::cout << "start\tstarts the music player" << std::endl;
         std::cout << "stop\tstops the music player" << std::endl;
         std::cout << "next\tskip to next song in the playlist" << std::endl;
+        std::cout << "prev\tskip to previous song in the playlist" << std::endl;
         return 0;
     }
 
@@ -49,7 +50,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            std::cout << "already running" << std::endl;
+            std::cout << "music-magister is already running." << std::endl;
             exit(1);
         }
     }
@@ -58,7 +59,7 @@ int main(int argc, char* argv[])
         int msqid;
         if((msqid = msgget(9900, 0666)) < 0)
         {
-            std::cout << "start the music-magister first ( use: mm start )" << std::endl;
+            std::cout << "start music-magister first. ( use: mm start )" << std::endl;
         }
         else
         {
@@ -126,13 +127,27 @@ void start_service()
         std::random_shuffle(audiofiles.begin(), audiofiles.end());
     }
 
-    for(auto file: audiofiles)
+    // Identifies the audio from the audioFiles to play.
+    int index = 0;
+
+    while(1)
     {
         pid_t childpid = fork();
         if(childpid == 0)
         {
             // child process
 
+            // if there is no music to play, just exit
+            if (audiofiles.size()==0)
+                exit(0);
+            // ensure index isn't out of bounds
+            else if (index < 0)
+                index = audiofiles.size()-1;
+            // ensure index isn't out of bounds
+            else if (index > audiofiles.size())
+                index = 0;
+
+            auto file = audiofiles[index];
             AudioStream as;
             as.FromFile(file);
             as.Play();
@@ -151,6 +166,14 @@ void start_service()
                 {
                     if( strcmp(rbuf.mtext, "next") == 0)
                     {
+                        index++;
+                        kill(childpid, SIGTERM);
+                        wait(&status);
+                        break;
+                    }
+                    else if( strcmp(rbuf.mtext, "prev") == 0)
+                    {
+                        index--;
                         kill(childpid, SIGTERM);
                         wait(&status);
                         break;
@@ -166,6 +189,7 @@ void start_service()
 
                 if (waitpid(childpid, &status, WNOHANG) != 0)
                 {
+                    index++;
                     break;
                 }
 

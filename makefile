@@ -39,6 +39,9 @@ $(OBJ_DIR):
 install:
 	cp $(BIN_DIR)/mm /usr/local/bin/
 
+# Uninstall the library
+uninstall:
+	rm /usr/local/bin/mm
 
 ## Clean up everything
 clean:

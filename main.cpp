@@ -59,25 +59,25 @@ int main(int argc, char* argv[])
     // if the music player hasn't already started
     if (msqid < 0 )
     {
-        if (cmd == "start") {
+        if (cmd == "start")
             start_service();
-        } else {
+        else
             std::cout << "start music-magister first. ( use: mm start )" << std::endl;
-        }
     }
     else
     {
+        // send the music daemon the new cmd
         struct mm_msgbuf sbuf;
         sbuf.mtype = 1;
-        strcpy(sbuf.mtext, argv[1]);
+        strcpy(sbuf.mtext, cmd.c_str());
         if (msgsnd(msqid, &sbuf, strlen(sbuf.mtext) + 1, IPC_NOWAIT) < 0)
         {
-            std::cout << "Some error occured!" << std::endl;
-            exit(1);
+            // this shouldn't happen
+            return 1;
         }
     }
 
-    exit(0);
+    return 0;
 }
 
 void start_service()
@@ -101,9 +101,13 @@ void start_service()
     if ((chdir("/")) < 0) {
         exit(EXIT_FAILURE);
     }
+
+    /*
+    // DEBUG
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
+    */
 
     int msqid;
     struct mm_msgbuf rbuf;
@@ -137,32 +141,42 @@ void start_service()
 
     while(1)
     {
-
         pid_t childpid = fork();
         if(childpid == 0)
         {
             // child process
+            std::string status = "eom";
 
-            // don't play cases
-            if (audiofiles.size()==0 || index < 0 || index >= audiofiles.size())
-                exit(0);
+            // check for out-of-bound
+            if (audiofiles.size()!=0 && index >= 0 && index < audiofiles.size()) {
+                auto file = audiofiles[index];
+                AudioStream as;
+                as.FromFile(file);
+                as.Play();
+            } else {
+                // if out-of-bound and no-repeat mode, then don't play next music
+                if (!mmcfg->GetRepeat())
+                    status = "idle";
+            }
 
-            auto file = audiofiles[index];
-            AudioStream as;
-            as.FromFile(file);
-            as.Play();
-
-            exit(0);
+            // Send the parent that the song playing is finished
+            struct mm_msgbuf sbuf;
+            sbuf.mtype = 1;
+            strcpy(sbuf.mtext, status.c_str());
+            if (msgsnd(msqid, &sbuf, strlen(sbuf.mtext) + 1, IPC_NOWAIT) < 0)
+            {
+                // this shouldn't happen
+            }
+            return;
         }
         else if(childpid > 0)
         {
             // parent process
 
             int status;
-
             while(1)
             {
-                if (msgrcv(msqid, &rbuf, 256, 1, IPC_NOWAIT) > 0)
+                if (msgrcv(msqid, &rbuf, 256, 1, 0) > 0)
                 {
                     if( strcmp(rbuf.mtext, "next") == 0)
                     {
@@ -188,31 +202,26 @@ void start_service()
                     else if ( strcmp(rbuf.mtext, "start") == 0)
                     {
                         // start over again
+                        // NOTE: maybe also reshuffle music list
                         index = 0;
-                        // NOTE: not sure if we should reshuffle everything
-                        if(mmcfg->GetShuffle())
-                        {
-                            std::random_shuffle(audiofiles.begin(), audiofiles.end());
-                        }
                         kill(childpid, SIGTERM);
                         wait(&status);
                         break;
                     }
-                }
-
-                if (waitpid(childpid, &status, WNOHANG) != 0)
-                {
-                    if (!mmcfg->GetRepeat() && index < 0)
+                    else if( strcmp(rbuf.mtext, "eom") == 0)
                     {
-                        // if in non-repeat mode, don't auto increase the index
-                        // after trying to play before first song
-                    }
-                    else
+                        // a song has finished playing, get next song
                         index++;
-                    break;
+                        wait(&status);
+                        break;
+                    }
+                    else if( strcmp(rbuf.mtext, "idle") == 0)
+                    {
+                        // just kill child
+                        wait(&status);
+                        // don't break from loop
+                    }
                 }
-
-                sleep(1);
             }
 
             // if non-repeat mode, don't let the index get past -1

@@ -1,8 +1,10 @@
 # Music Magister
 
-A simple command-line music player application for linux.
+Music Magister is a light-weight console music player for linux.
 
 ## Installation
+
+To install mm you need to compile it from source. But first get all the dependencies.
 
 ### Dependencies
 
@@ -29,7 +31,6 @@ To install the application, so you may run it from any path, you can use the `ma
 ```bash
 sudo make install
 ```
-
 
 ## Usage
 

@@ -27,17 +27,13 @@ struct mm_msgbuf {
 
 void start_service();
 
+void print_usage();
+
 int main(int argc, char* argv[])
 {
     if(argc < 2)
     {
-        std::cout << "usage: mm <command>" << std::endl;
-        std::cout << "\nlist of command" << std::endl;
-        std::cout <<   "---------------" << std::endl;
-        std::cout << "start\tstarts the music player" << std::endl;
-        std::cout << "stop\tstops the music player" << std::endl;
-        std::cout << "next\tskip to next song in the playlist" << std::endl;
-        std::cout << "prev\tskip to previous song in the playlist" << std::endl;
+        print_usage();
         return 0;
     }
 
@@ -63,6 +59,7 @@ int main(int argc, char* argv[])
         }
         else
         {
+            // TODO: check for invalid options here.
             struct mm_msgbuf sbuf;
             sbuf.mtype = 1;
             strcpy(sbuf.mtext, argv[1]);
@@ -73,6 +70,17 @@ int main(int argc, char* argv[])
         }
     }
     exit(0);
+}
+
+void print_usage()
+{
+    std::cout << "usage: mm <command>" << std::endl;
+    std::cout << "\nlist of command" << std::endl;
+    std::cout <<   "---------------" << std::endl;
+    std::cout << "start\tstarts the music player" << std::endl;
+    std::cout << "stop\tstops the music player" << std::endl;
+    std::cout << "next\tskip to next song in the playlist" << std::endl;
+    std::cout << "prev\tskip to previous song in the playlist" << std::endl;
 }
 
 void start_service()
@@ -132,20 +140,15 @@ void start_service()
 
     while(1)
     {
+
         pid_t childpid = fork();
         if(childpid == 0)
         {
             // child process
 
-            // if there is no music to play, just exit
-            if (audiofiles.size()==0)
+            // don't play cases
+            if (audiofiles.size()==0 || index < 0 || index >= audiofiles.size())
                 exit(0);
-            // ensure index isn't out of bounds
-            else if (index < 0)
-                index = audiofiles.size()-1;
-            // ensure index isn't out of bounds
-            else if (index > audiofiles.size())
-                index = 0;
 
             auto file = audiofiles[index];
             AudioStream as;
@@ -189,12 +192,32 @@ void start_service()
 
                 if (waitpid(childpid, &status, WNOHANG) != 0)
                 {
-                    index++;
+                    if (!mmcfg->GetRepeat() && index < 0)
+                    {
+                        // if in non-repeat mode, don't auto increase the index
+                        // after trying to play before first song
+                    }
+                    else
+                        index++;
                     break;
                 }
 
                 sleep(1);
             }
+
+            // if non-repeat mode, don't let the index get past -1
+            if (!mmcfg->GetRepeat() && index < 0)
+                index = -1;
+            // if non-repeat mode, don't let the index get past size()
+            else if (!mmcfg->GetRepeat() && index >= audiofiles.size())
+                index = audiofiles.size();
+            // ensure index isn't out of bounds
+            else if (index < 0)
+                index = audiofiles.size()-1;
+            // ensure index isn't out of bounds
+            else if (index >= audiofiles.size())
+                index = 0;
+
         }
         else
         {

@@ -41,6 +41,13 @@ public:
         return dirs;
     }
 
+    // NOTE: default behavior is false
+    bool GetRepeat()
+    {
+        return m_configs["repeat"] == "true";
+    }
+
+    // NOTE: default behavior is false
     bool GetShuffle()
     {
         return m_configs["shuffle"] == "true";
@@ -60,6 +67,7 @@ private:
             std::ofstream configfile(configpath);
             configfile << "# configuration file for music-magister" << std::endl;
             configfile << std::endl;
+            configfile << "repeat = false" << std::endl;
             configfile << "shuffle = true" << std::endl;
             configfile << "libdirs = ['" << pw->pw_dir << "/Music']" << std::endl;
         }
